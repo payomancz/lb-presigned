@@ -1,6 +1,6 @@
 # LB Presigned
 
-A FiveM script to generate presigned URLs for uploading files to S3.
+A FiveM script to generate presigned URLs for uploading files to S3 compatible with self-hosted S3 server.
 
 ## Configuration
 
