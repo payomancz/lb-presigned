@@ -3,6 +3,9 @@
     "module": "src/index.ts",
     "type": "module",
     "private": true,
+    "scripts": {
+        "test": "node --test test/presigned.test.cjs"
+    },
     "devDependencies": {
         "@citizenfx/server": "latest",
         "@types/bun": "latest",

@@ -1,6 +1,6 @@
 import { parseArgs } from 'util'
 import { watch } from 'chokidar'
-import { sep } from 'path'
+import { resolve, sep } from 'path'
 import { Glob } from 'bun'
 import { rm } from 'node:fs/promises'
 
@@ -16,6 +16,7 @@ const { values } = parseArgs({
 })
 
 const glob = new Glob('./src/**/*.ts')
+const outdir = resolve('../server')
 
 async function build() {
     console.log('Building...')
@@ -26,12 +27,12 @@ async function build() {
         entrypoints.push(file)
     }
 
-    await rm('../server', { recursive: true, force: true })
+    await rm(outdir, { recursive: true, force: true })
 
     try {
         const result = await Bun.build({
             entrypoints: entrypoints,
-            outdir: '../server',
+            outdir,
             format: 'cjs',
             target: 'node',
             minify: { whitespace: true, syntax: true }

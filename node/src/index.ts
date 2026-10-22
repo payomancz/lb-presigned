@@ -33,14 +33,29 @@ const s3Region = GetConvar('LB_S3_REGION', '')
 const s3AccessKeyId = GetConvar('LB_S3_ACCESS_KEY_ID', '')
 const s3SecretAccessKey = GetConvar('LB_S3_SECRET_ACCESS_KEY', '')
 const s3RawDomain = GetConvar('LB_S3_DOMAIN', '')
+const s3RawEndpoint = GetConvar('LB_S3_ENDPOINT', '')
 
 const useS3 = !!(s3Bucket && s3Region && s3AccessKeyId && s3SecretAccessKey)
+
+// Custom S3 endpoints (including RustFS) use path-style addressing.
+const s3Endpoint = !useR2 && s3RawEndpoint
+    ? (s3RawEndpoint.includes('://') ? s3RawEndpoint.trim() : `https://${s3RawEndpoint.trim()}`).replace(/\/+$/, '')
+    : undefined
+
+if (s3Endpoint) {
+    const endpoint = new URL(s3Endpoint)
+
+    if (!['http:', 'https:'].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
+        throw new Error('LB Presigned: LB_S3_ENDPOINT must be an HTTP(S) S3 API URL without credentials, query parameters or a fragment')
+    }
+}
 
 if (!useR2 && !useS3) {
     throw new Error(
         'LB Presigned: No storage provider configured.\n' +
             '  For R2: set LB_R2_BUCKET, LB_R2_ACCOUNT_ID, LB_R2_ACCESS_KEY_ID, LB_R2_SECRET_ACCESS_KEY, LB_R2_DOMAIN\n' +
-            '  For S3: set LB_S3_BUCKET, LB_S3_REGION, LB_S3_ACCESS_KEY_ID, LB_S3_SECRET_ACCESS_KEY'
+            '  For S3: set LB_S3_BUCKET, LB_S3_REGION, LB_S3_ACCESS_KEY_ID, LB_S3_SECRET_ACCESS_KEY\n' +
+            '  For RustFS: also set LB_S3_ENDPOINT to your S3 API URL'
     )
 }
 
@@ -49,11 +64,16 @@ const domain = useR2
     ? normalizeUrl(r2RawDomain)
     : s3RawDomain
       ? normalizeUrl(s3RawDomain)
-      : `https://${s3Bucket}.s3.${s3Region}.amazonaws.com`
+      : s3Endpoint
+        ? `${s3Endpoint}/${encodeURIComponent(s3Bucket)}`
+        : `https://${s3Bucket}.s3.${s3Region}.amazonaws.com`
 
 const client = new S3Client({
     region: useR2 ? 'auto' : s3Region,
-    endpoint: useR2 ? `https://${r2AccountId}.r2.cloudflarestorage.com` : undefined,
+    endpoint: useR2 ? `https://${r2AccountId}.r2.cloudflarestorage.com` : s3Endpoint,
+    forcePathStyle: !!s3Endpoint,
+    // The file body is supplied later by the uploader, so do not sign a checksum of an empty body.
+    ...(s3Endpoint ? { requestChecksumCalculation: 'WHEN_REQUIRED' as const } : {}),
     credentials: {
         accessKeyId: useR2 ? r2AccessKeyId : s3AccessKeyId,
         secretAccessKey: useR2 ? r2SecretAccessKey : s3SecretAccessKey
